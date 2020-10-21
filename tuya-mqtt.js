@@ -9,6 +9,7 @@ const SimpleSwitch = require('./devices/simple-switch')
 const SimpleDimmer = require('./devices/simple-dimmer')
 const RGBTWLight = require('./devices/rgbtw-light')
 const GenericDevice = require('./devices/generic-device')
+const TekkinSwitch = require('./devices/tekkin-switch')
 const utils = require('./lib/utils')
 
 var CONFIG = undefined
@@ -25,7 +26,7 @@ async function processExit(exitCode) {
     for (let tuyaDevice of tuyaDevices) {
         tuyaDevice.device.disconnect()
     }
-    if (exitCode || exitCode === 0) debug('Exit code: '+exitCode)
+    if (exitCode || exitCode === 0) debug('Exit code: ' + exitCode)
     await utils.sleep(1)
     process.exit()
 }
@@ -40,6 +41,9 @@ function getDevice(configDevice, mqttClient) {
     switch (configDevice.type) {
         case 'SimpleSwitch':
             return new SimpleSwitch(deviceInfo)
+            break;
+        case 'TekkinSwitch':
+            return new TekkinSwitch(deviceInfo)
             break;
         case 'SimpleDimmer':
             return new SimpleDimmer(deviceInfo)
@@ -64,7 +68,7 @@ async function republishDevices() {
         debug('Resending device config/state in 30 seconds')
         await utils.sleep(30)
         for (let device of tuyaDevices) {
-            device.publishMqtt(device.baseTopic+'status', 'online')
+            device.publishMqtt(device.baseTopic + 'status', 'online')
             device.init()
         }
         await utils.sleep(2)
@@ -72,7 +76,7 @@ async function republishDevices() {
 }
 
 // Main code function
-const main = async() => {
+const main = async () => {
     let configDevices
     let mqttClient
 
@@ -91,13 +95,17 @@ const main = async() => {
         CONFIG.retain = false
     }
 
-    try {
-        configDevices = fs.readFileSync('./devices.conf', 'utf8')
-        configDevices = json5.parse(configDevices)
-    } catch (e) {
-        console.error('Devices file not found!')
-        debugError(e)
-        process.exit(1)
+    if (CONFIG.devices) {
+        configDevices = CONFIG.devices
+    } else {
+        try {
+            configDevices = fs.readFileSync('./devices.conf', 'utf8')
+            configDevices = json5.parse(configDevices)
+        } catch (e) {
+            console.error('Devices file not found!')
+            debugError(e)
+            process.exit(1)
+        }
     }
 
     if (!configDevices.length) {
@@ -141,8 +149,8 @@ const main = async() => {
             const commandTopic = splitTopic[topicLength - 1]
             const deviceTopicLevel = splitTopic[1]
 
-            if (topic === 'homeassistant/status' || topic === 'hass/status' ) {
-                debug('Home Assistant state topic '+topic+' received message: '+message)
+            if (topic === 'homeassistant/status' || topic === 'hass/status') {
+                debug('Home Assistant state topic ' + topic + ' received message: ' + message)
                 if (message === 'online') {
                     republishDevices()
                 }
@@ -163,7 +171,7 @@ const main = async() => {
                         device.processDpsCommand(message)
                         break;
                     case 5:
-                        const dpsKey = splitTopic[topicLength-2]
+                        const dpsKey = splitTopic[topicLength - 2]
                         device.processDpsKeyCommand(message, dpsKey)
                         break;
                 }
